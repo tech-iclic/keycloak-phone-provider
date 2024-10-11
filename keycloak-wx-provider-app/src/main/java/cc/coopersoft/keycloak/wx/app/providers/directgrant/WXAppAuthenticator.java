@@ -140,8 +140,12 @@ public class WXAppAuthenticator implements Authenticator {
             .equals("false");
   }
 
-  private String getWXAppId(AuthenticationFlowContext context){
+  private String getWXAppId(AuthenticationFlowContext context) {
     return context.getAuthenticatorConfig().getConfig().get(WXAppAuthenticatorFactory.WX_API_ID);
+  }
+
+  private String getAppIdKey(AuthenticationFlowContext context) {
+    return isSingleApp(context) ? USER_OPEN_ID_ATTRIBUTE : USER_OPEN_ID_ATTRIBUTE + "_" + getWXAppId(context);
   }
 
   private Optional<WXAPICredentials> getWXAPICredentials(AuthenticationFlowContext context){
@@ -166,6 +170,12 @@ public class WXAppAuthenticator implements Authenticator {
     var userProvider = context.getSession().users();
 
     return userProvider.searchForUserByUserAttributeStream(context.getRealm(), USER_UNION_ID_ATTRIBUTE, unionId).findFirst()
+        .map( it -> {
+          String appIdKey = getAppIdKey(context);
+          if (!it.getAttributes().containsKey(appIdKey))
+            it.setSingleAttribute(appIdKey, openId);
+          return it;
+        })
         //.or(() -> userProvider.searchForUserByUserAttributeStream(context.getRealm(), USER_OPEN_ID_ATTRIBUTE, openId).findFirst())
         .or(() -> createEveryUser(context,unionId,openId));
 
@@ -191,7 +201,7 @@ public class WXAppAuthenticator implements Authenticator {
       newUser.setEnabled(true);
       newUser.setSingleAttribute(USER_UNION_ID_ATTRIBUTE, unionId);
 
-      newUser.setSingleAttribute(isSingleApp(context) ? USER_OPEN_ID_ATTRIBUTE : USER_OPEN_ID_ATTRIBUTE + "_" + getWXAppId(context), openId);
+      newUser.setSingleAttribute(getAppIdKey(context), openId);
 
       //context.getAuthenticationSession().setClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM, unionId);
       logger.info("create user by wx :" + unionId);
